@@ -101,6 +101,8 @@ struct Walker<'a> {
 /// counted twice through them. Unreadable directories are kept with `error` set.
 pub fn scan(root: &Path, progress: &Progress) -> io::Result<Option<Tree>> {
     let started = Instant::now();
+    // No effect unless elevated; then protected folders become listable.
+    crate::elevation::enable_backup_privilege();
     let meta = fs::metadata(root)?;
     if !meta.is_dir() {
         return Err(io::Error::new(io::ErrorKind::NotADirectory, "not a directory"));

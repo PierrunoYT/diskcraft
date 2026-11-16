@@ -12,6 +12,9 @@ and the project uses [Semantic Versioning](https://semver.org/).
   and `--report` output. Read from the directory listing itself
   (`FILE_FULL_DIR_INFO` on Windows, `st_blocks` on Unix), so scans are no slower.
   Cloud-only placeholders now show their real footprint (0).
+- "Restart as administrator" button (Windows) when folders could not be read: relaunches
+  through UAC and rescans the same folder. Elevated scans enable SeBackupPrivilege, so
+  folders whose ACLs exclude administrators are included as well.
 
 ### Changed
 

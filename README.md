@@ -37,4 +37,6 @@ Keyboard in the tree: arrows (←/→ collapse/expand), Home/End, PageUp/PageDow
   Hard links are counted once per link.
 - On Unix the scan stays on the root's filesystem (no `/proc`, network mounts, …).
 - Folders that cannot be read (permissions) are marked ⚠ and counted in the status bar;
-  run as administrator to include protected system folders.
+  **Restart as administrator** appears next to the count on Windows. Elevated scans also
+  enable the backup privilege, so folders that deny even administrators (e.g.
+  `System Volume Information`) are listed too.

@@ -72,6 +72,8 @@ struct App {
     /// Kept while a rescan runs, so cancelling restores it.
     view: Option<View>,
     message: Option<String>,
+    /// Not elevated on Windows: unreadable folders may become readable after a restart.
+    can_elevate: bool,
 }
 
 impl App {
@@ -85,6 +87,7 @@ impl App {
             job: None,
             view: None,
             message: None,
+            can_elevate: crate::elevation::can_relaunch_elevated(),
         };
         if let Some(path) = initial {
             app.path_input = path.display().to_string();
@@ -217,7 +220,8 @@ impl App {
         }
     }
 
-    fn status_bar(&self, ui: &mut Ui) {
+    fn status_bar(&mut self, ui: &mut Ui) {
+        let mut restart = false;
         ui.horizontal(|ui| {
             if let Some(job) = &self.job {
                 let p = &job.progress;
@@ -242,9 +246,18 @@ impl App {
                 if tree.errors > 0 {
                     ui.colored_label(
                         ui.visuals().warn_fg_color,
-                        format!("⚠ {} entries could not be read", format::count(tree.errors)),
+                        match tree.errors {
+                            1 => "⚠ 1 entry could not be read".to_owned(),
+                            n => format!("⚠ {} entries could not be read", format::count(n)),
+                        },
                     )
-                    .on_hover_text("Usually protected system folders. Run as administrator to include them.");
+                    .on_hover_text("Usually protected system folders.");
+                    if self.can_elevate {
+                        restart = ui
+                            .button("🛡 Restart as administrator")
+                            .on_hover_text("Rescan this folder with administrator rights")
+                            .clicked();
+                    }
                 }
             }
             if let Some(msg) = &self.message {
@@ -252,6 +265,24 @@ impl App {
                 ui.colored_label(ui.visuals().error_fg_color, msg);
             }
         });
+        if restart {
+            self.restart_elevated(ui.ctx());
+        }
+    }
+
+    /// Relaunches through UAC, rescanning the current folder, and closes this instance.
+    fn restart_elevated(&mut self, ctx: &egui::Context) {
+        #[cfg(windows)]
+        {
+            let root = self.view.as_ref().map(|v| v.tree.root_path.clone());
+            let args: Vec<&std::ffi::OsStr> = root.iter().map(|p| p.as_os_str()).collect();
+            match crate::elevation::relaunch_elevated(&args) {
+                Ok(()) => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+                Err(e) => self.message = Some(format!("Not restarted: {e}")),
+            }
+        }
+        #[cfg(not(windows))]
+        let _ = ctx;
     }
 }
 
