@@ -3,6 +3,7 @@
 
 mod app;
 mod format;
+mod listing;
 mod report;
 mod scan;
 mod tree;

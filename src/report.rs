@@ -43,9 +43,10 @@ pub fn run(args: &[String]) -> ExitCode {
 
     let r = tree.node(ROOT);
     println!(
-        "{}  {}  ({} files, {} folders)  scanned in {:.2?}{}",
+        "{}  {} ({} on disk)  ({} files, {} folders)  scanned in {:.2?}{}",
         tree.root_path.display(),
         format::size(r.size),
+        format::size(r.allocated),
         format::count(r.files),
         format::count(r.dirs),
         tree.elapsed,
@@ -54,6 +55,7 @@ pub fn run(args: &[String]) -> ExitCode {
             n => format!(", {} unreadable", format::count(n)),
         }
     );
+    println!("{:>10} {:>10} {:>7}", "size", "on disk", "");
     print_children(&tree, ROOT, 1, depth, top);
     ExitCode::SUCCESS
 }
@@ -67,8 +69,9 @@ fn print_children(tree: &Tree, id: NodeId, level: usize, max_depth: usize, top: 
     for &c in children.iter().take(top) {
         let node = tree.node(c);
         println!(
-            "{:>10} {:>6.1}%  {}{}{}{}",
+            "{:>10} {:>10} {:>6.1}%  {}{}{}{}",
             format::size(node.size),
+            format::size(node.allocated),
             format::fraction(node.size, parent.size) * 100.0,
             "  ".repeat(level - 1),
             tree.name(c),
@@ -82,9 +85,11 @@ fn print_children(tree: &Tree, id: NodeId, level: usize, max_depth: usize, top: 
     let rest = &children[children.len().min(top)..];
     if !rest.is_empty() {
         let bytes: u64 = rest.iter().map(|&c| tree.node(c).size).sum();
+        let allocated: u64 = rest.iter().map(|&c| tree.node(c).allocated).sum();
         println!(
-            "{:>10} {:>6.1}%  {}… {} more",
+            "{:>10} {:>10} {:>6.1}%  {}… {} more",
             format::size(bytes),
+            format::size(allocated),
             format::fraction(bytes, parent.size) * 100.0,
             "  ".repeat(level - 1),
             format::count(rest.len() as u64),

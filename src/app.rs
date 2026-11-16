@@ -232,8 +232,9 @@ impl App {
                 let tree = &view.tree;
                 let root = tree.node(ROOT);
                 ui.label(format!(
-                    "{} · {} files · {} folders · scanned in {:.1?}",
+                    "{} ({} on disk) · {} files · {} folders · scanned in {:.1?}",
                     format::size(root.size),
+                    format::size(root.allocated),
                     format::count(root.files),
                     format::count(root.dirs),
                     tree.elapsed,
@@ -283,7 +284,7 @@ impl eframe::App for App {
         let side_tab = &mut self.side_tab;
         egui::Panel::right("side")
             .resizable(true)
-            .default_size(520.0)
+            .default_size(440.0)
             .size_range(260.0..=1400.0)
             .show(ui, |ui| side_panel(ui, view, side_tab, &mut actions));
         egui::CentralPanel::default().show(ui, |ui| {
@@ -479,9 +480,10 @@ fn tree_table(ui: &mut Ui, view: &mut View, show_files: bool, actions: &mut Vec<
         .resizable(true)
         .sense(Sense::click())
         .cell_layout(Layout::left_to_right(Align::Center))
-        .column(Column::initial(340.0).at_least(160.0).clip(true))
+        .column(Column::initial(300.0).at_least(160.0).clip(true))
         .column(Column::initial(84.0).at_least(60.0))
-        .column(Column::initial(130.0).at_least(70.0))
+        .column(Column::initial(84.0).at_least(60.0))
+        .column(Column::initial(110.0).at_least(70.0))
         .column(Column::initial(84.0).at_least(50.0))
         .column(Column::initial(70.0).at_least(50.0))
         .column(Column::remainder().at_least(110.0));
@@ -496,6 +498,7 @@ fn tree_table(ui: &mut Ui, view: &mut View, show_files: bool, actions: &mut Vec<
             let sort = (view.sort, view.descending);
             sort_header(&mut header, "Name", SortKey::Name, sort, false, actions);
             sort_header(&mut header, "Size", SortKey::Size, sort, true, actions);
+            sort_header(&mut header, "Allocated", SortKey::Allocated, sort, true, actions);
             header.col(|ui| {
                 ui.strong("% of parent");
             });
@@ -531,6 +534,7 @@ fn tree_table(ui: &mut Ui, view: &mut View, show_files: bool, actions: &mut Vec<
                     }
                 });
                 row.col(|ui| right_label(ui, format::size(node.size)));
+                row.col(|ui| right_label(ui, format::size(node.allocated)));
                 row.col(|ui| {
                     let parent_size = node.parent().map_or(node.size, |p| tree.node(p).size);
                     percent_bar(ui, format::fraction(node.size, parent_size));
@@ -720,9 +724,10 @@ fn treemap_panel(ui: &mut Ui, view: &mut View, actions: &mut Vec<Action>) {
                 let node = tree.node(id);
                 ui.strong(tree.path(id).display().to_string());
                 ui.label(format!(
-                    "{}  ({:.1} % of view)",
+                    "{}  ({:.1} % of view) · {} on disk",
                     format::size(node.size),
-                    format::fraction(node.size, focus_size) * 100.0
+                    format::fraction(node.size, focus_size) * 100.0,
+                    format::size(node.allocated),
                 ));
                 if node.is_dir {
                     ui.label(format!("{} files · {} folders", format::count(node.files), format::count(node.dirs)));

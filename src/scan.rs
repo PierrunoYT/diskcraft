@@ -12,6 +12,7 @@ use std::time::Instant;
 
 use rayon::prelude::*;
 
+use crate::listing::{Kind, list_dir};
 use crate::tree::{Entry, NodeId, Tree, TreeBuilder, unix_secs};
 
 /// Live counters shared between the scanner and the UI. Also carries the cancel flag.
@@ -55,6 +56,7 @@ impl Progress {
 /// A file inside [`RawDir`]; its name is a slice of the directory's `names` buffer.
 struct RawFile {
     size: u64,
+    allocated: u64,
     mtime: i64,
     name_end: u32,
 }
@@ -90,8 +92,7 @@ impl RawDir {
 struct Walker<'a> {
     progress: &'a Progress,
     /// Device of the scan root; subdirectories on other filesystems are skipped (Unix only).
-    #[cfg(unix)]
-    root_dev: u64,
+    root_dev: Option<u64>,
 }
 
 /// Scans `root` recursively. Returns `Ok(None)` if cancelled through `progress`.
@@ -105,11 +106,11 @@ pub fn scan(root: &Path, progress: &Progress) -> io::Result<Option<Tree>> {
         return Err(io::Error::new(io::ErrorKind::NotADirectory, "not a directory"));
     }
 
-    let walker = Walker {
-        progress,
-        #[cfg(unix)]
-        root_dev: std::os::unix::fs::MetadataExt::dev(&meta),
-    };
+    #[cfg(unix)]
+    let root_dev = Some(std::os::unix::fs::MetadataExt::dev(&meta));
+    #[cfg(not(unix))]
+    let root_dev = None;
+    let walker = Walker { progress, root_dev };
 
     // Deep hierarchies plus work-stealing nest frames, so give workers generous stacks.
     let pool = rayon::ThreadPoolBuilder::new()
@@ -129,7 +130,7 @@ pub fn scan(root: &Path, progress: &Progress) -> io::Result<Option<Tree>> {
         }
         let mut builder = TreeBuilder::new(
             capacity as usize,
-            Entry { name: raw.name(), size: 0, mtime: raw.mtime, is_dir: true, error: raw.error },
+            Entry { name: raw.name(), size: 0, allocated: 0, mtime: raw.mtime, is_dir: true, error: raw.error },
         );
         flatten(raw, crate::tree::ROOT, &mut builder);
         Ok(Some(builder.finish(root.to_path_buf(), progress.errors.load(Relaxed), started.elapsed())))
@@ -142,7 +143,6 @@ impl Walker<'_> {
         let name_len = name.len() as u32;
         let mut names = name;
         let mut files = Vec::new();
-        let mut error = false;
         let done = |names: String, files: Vec<RawFile>, dirs: Vec<RawDir>, error| RawDir {
             names: names.into_boxed_str(),
             files: files.into_boxed_slice(),
@@ -157,45 +157,24 @@ impl Walker<'_> {
         p.dirs.fetch_add(1, Relaxed);
         p.set_current(path);
 
-        let Ok(entries) = fs::read_dir(path) else {
-            p.error();
-            return done(names, files, Vec::new(), true);
-        };
-
         let mut subdirs: Vec<(PathBuf, String, i64)> = Vec::new();
         let mut bytes = 0;
-        for entry in entries {
-            // On Windows, file type and metadata come from the directory listing itself;
-            // no extra system call per file.
-            let (entry, file_type, meta) = match entry.and_then(|e| {
-                let ft = e.file_type()?;
-                let meta = e.metadata()?;
-                Ok((e, ft, meta))
-            }) {
-                Ok(x) => x,
-                Err(_) => {
-                    error = true;
-                    p.error();
-                    continue;
-                }
-            };
-            if file_type.is_symlink() {
-                continue; // includes Windows junctions / mount points
+        let listed = list_dir(path, self.root_dev, |item| match item.kind {
+            Kind::Dir(child) => subdirs.push((child, item.name.to_owned(), item.mtime)),
+            Kind::File => {
+                bytes += item.size;
+                names.push_str(item.name);
+                files.push(RawFile {
+                    size: item.size,
+                    allocated: item.allocated,
+                    mtime: item.mtime,
+                    name_end: names.len() as u32,
+                });
             }
-            let file_name = entry.file_name();
-            let name = file_name.to_string_lossy();
-            let mtime = unix_secs(meta.modified().ok());
-            if file_type.is_dir() {
-                #[cfg(unix)]
-                if std::os::unix::fs::MetadataExt::dev(&meta) != self.root_dev {
-                    continue;
-                }
-                subdirs.push((entry.path(), name.into_owned(), mtime));
-            } else {
-                bytes += meta.len();
-                names.push_str(&name);
-                files.push(RawFile { size: meta.len(), mtime, name_end: names.len() as u32 });
-            }
+        });
+        let error = listed.unwrap_or(true);
+        if error {
+            p.error();
         }
         p.files.fetch_add(files.len() as u64, Relaxed);
         p.bytes.fetch_add(bytes, Relaxed);
@@ -210,11 +189,21 @@ impl Walker<'_> {
 
 /// Moves `raw`'s contents below node `id`, consuming (and freeing) it as it goes.
 fn flatten(raw: RawDir, id: NodeId, builder: &mut TreeBuilder) {
-    let dirs = raw.dirs.iter().map(|d| Entry { name: d.name(), size: 0, mtime: d.mtime, is_dir: true, error: d.error });
+    let dirs = raw
+        .dirs
+        .iter()
+        .map(|d| Entry { name: d.name(), size: 0, allocated: 0, mtime: d.mtime, is_dir: true, error: d.error });
     let files = raw
         .file_names()
         .zip(&raw.files)
-        .map(|(name, f)| Entry { name, size: f.size, mtime: f.mtime, is_dir: false, error: false });
+        .map(|(name, f)| Entry {
+            name,
+            size: f.size,
+            allocated: f.allocated,
+            mtime: f.mtime,
+            is_dir: false,
+            error: false,
+        });
     let first = builder.add_children(id, dirs.chain(files));
     let RawDir { dirs, .. } = raw; // file names are no longer needed
     for (k, sub) in dirs.into_vec().into_iter().enumerate() {
@@ -261,5 +250,22 @@ mod tests {
         assert_eq!((txt.bytes, txt.files), (1101, 3), "extensions are case-folded");
         let largest: Vec<&str> = stats.largest.iter().map(|&n| tree.name(n)).collect();
         assert_eq!(largest, ["two.txt", "one.TXT"]);
+    }
+
+    #[test]
+    fn reports_allocated_size() {
+        let root = std::env::temp_dir().join(format!("diskcraft-alloc-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        // Large enough to live outside the NTFS MFT, so it occupies whole clusters/blocks.
+        fs::write(root.join("big.bin"), vec![1u8; 100_000]).unwrap();
+
+        let tree = scan(&root, &Progress::default()).unwrap().unwrap();
+        fs::remove_dir_all(&root).unwrap();
+
+        let file = tree.node(tree.children(ROOT)[0]);
+        assert_eq!(file.size, 100_000);
+        assert!(file.allocated >= 100_000 && file.allocated.is_multiple_of(512), "allocated {}", file.allocated);
+        assert_eq!(tree.node(ROOT).allocated, file.allocated);
     }
 }

@@ -1,7 +1,7 @@
 //! Flat, index-based representation of a scanned directory tree.
 //!
 //! Memory layout is tuned for drives with millions of entries: nodes are fixed-size
-//! (48 bytes), names live in one shared buffer, and a directory's children occupy a
+//! (56 bytes), names live in one shared buffer, and a directory's children occupy a
 //! contiguous slice of one shared index array instead of a `Vec` per node.
 
 use std::cmp::{Ordering, Reverse};
@@ -18,6 +18,8 @@ pub struct Node {
     name_offset: u64,
     /// Total bytes: the file length, or the recursive sum for directories.
     pub size: u64,
+    /// Bytes allocated on disk (see [`crate::listing::Item::allocated`]), summed for directories.
+    pub allocated: u64,
     /// Unix seconds of the file mtime, or the newest mtime below a directory.
     mtime: i64,
     parent: NodeId,
@@ -33,7 +35,7 @@ pub struct Node {
     pub error: bool,
 }
 
-const _: () = assert!(std::mem::size_of::<Node>() == 48);
+const _: () = assert!(std::mem::size_of::<Node>() == 56);
 
 impl Node {
     pub fn parent(&self) -> Option<NodeId> {
@@ -53,6 +55,7 @@ impl Node {
 pub enum SortKey {
     Name,
     Size,
+    Allocated,
     Files,
     Folders,
     Modified,
@@ -150,6 +153,7 @@ impl Tree {
             let ord = match key {
                 SortKey::Name => y.is_dir.cmp(&x.is_dir).then_with(|| cmp_name(name(a), name(b))),
                 SortKey::Size => x.size.cmp(&y.size),
+                SortKey::Allocated => x.allocated.cmp(&y.allocated),
                 SortKey::Files => x.files.cmp(&y.files),
                 SortKey::Folders => x.dirs.cmp(&y.dirs),
                 SortKey::Modified => x.mtime.cmp(&y.mtime),
@@ -231,6 +235,7 @@ pub fn unix_secs(time: Option<SystemTime>) -> i64 {
 pub struct Entry<'a> {
     pub name: &'a str,
     pub size: u64,
+    pub allocated: u64,
     pub mtime: i64,
     pub is_dir: bool,
     pub error: bool,
@@ -259,6 +264,7 @@ impl TreeBuilder {
         self.nodes.push(Node {
             name_offset,
             size: e.size,
+            allocated: e.allocated,
             mtime: e.mtime,
             parent,
             first_child: 0,
@@ -289,9 +295,10 @@ impl TreeBuilder {
     pub fn finish_dir(&mut self, dir: NodeId) {
         let node = &self.nodes[dir as usize];
         let range = node.first_child as usize..(node.first_child + node.child_count) as usize;
-        let (mut size, mut files, mut dirs, mut mtime) = (0u64, 0u32, 0u32, node.mtime);
+        let (mut size, mut allocated, mut files, mut dirs, mut mtime) = (0u64, 0u64, 0u32, 0u32, node.mtime);
         for c in &self.nodes[range] {
             size += c.size;
+            allocated += c.allocated;
             mtime = mtime.max(c.mtime);
             if c.is_dir {
                 files += c.files;
@@ -301,7 +308,7 @@ impl TreeBuilder {
             }
         }
         let node = &mut self.nodes[dir as usize];
-        (node.size, node.files, node.dirs, node.mtime) = (size, files, dirs, mtime);
+        (node.size, node.allocated, node.files, node.dirs, node.mtime) = (size, allocated, files, dirs, mtime);
     }
 
     pub fn finish(mut self, root_path: PathBuf, errors: u64, elapsed: Duration) -> Tree {
