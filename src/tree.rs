@@ -68,9 +68,9 @@ pub struct ExtStat {
 }
 
 pub struct SubtreeStats {
-    /// Sorted by bytes, descending.
+    /// Sorted by allocated bytes, descending.
     pub extensions: Vec<ExtStat>,
-    /// Largest files, descending.
+    /// Files using the most disk space, descending.
     pub largest: Vec<NodeId>,
 }
 
@@ -163,7 +163,8 @@ impl Tree {
         });
     }
 
-    /// File-type breakdown and the `top_n` largest files below `id`.
+    /// File-type breakdown and the `top_n` files using the most disk space below `id`.
+    /// Weighted by allocated size, so cloud-only placeholders do not dominate.
     pub fn subtree_stats(&self, id: NodeId, top_n: usize) -> SubtreeStats {
         let mut by_ext: HashMap<String, (u64, u64)> = HashMap::new();
         let mut heap: BinaryHeap<Reverse<(u64, NodeId)>> = BinaryHeap::with_capacity(top_n + 1);
@@ -183,11 +184,11 @@ impl Tree {
             } else {
                 by_ext.entry(ext.to_owned()).or_default()
             };
-            entry.0 += node.size;
+            entry.0 += node.allocated;
             entry.1 += 1;
 
             if top_n > 0 {
-                heap.push(Reverse((node.size, n)));
+                heap.push(Reverse((node.allocated, n)));
                 if heap.len() > top_n {
                     heap.pop();
                 }
@@ -324,7 +325,7 @@ impl TreeBuilder {
         };
         for id in 0..tree.nodes.len() as NodeId {
             if tree.node(id).child_count > 1 {
-                tree.sort_children(id, SortKey::Size, true);
+                tree.sort_children(id, SortKey::Allocated, true);
             }
         }
         tree

@@ -69,7 +69,7 @@ impl Treemap {
             let text_color = if cell.kind == CellKind::Frame { Color32::WHITE } else { Color32::BLACK };
             let label = match cell.kind {
                 CellKind::Frame if r.width() > 40.0 && r.height() > 48.0 => {
-                    Some(format!("{}  {}", tree.name(cell.id), format::size(node.size)))
+                    Some(format!("{}  {}", tree.name(cell.id), format::size(node.allocated)))
                 }
                 CellKind::Leaf if r.width() > 48.0 && r.height() > 16.0 => Some(tree.name(cell.id).to_owned()),
                 _ => None,
@@ -96,11 +96,12 @@ impl Treemap {
 }
 
 fn layout_dir(tree: &Tree, dir: NodeId, rect: Rect, depth: u8, hue: Option<f32>, out: &mut Vec<Cell>) {
-    // The tree view may have re-sorted children; the layout needs them by size.
+    // The tree view may have re-sorted children; the layout needs them by disk usage.
+    // Areas use allocated size: online-only placeholders report their full length but use no disk.
     let mut items: Vec<(NodeId, u64)> = tree
         .children(dir)
         .iter()
-        .map(|&c| (c, tree.node(c).size))
+        .map(|&c| (c, tree.node(c).allocated))
         .filter(|&(_, size)| size > 0)
         .collect();
     items.sort_unstable_by_key(|&(_, size)| std::cmp::Reverse(size));

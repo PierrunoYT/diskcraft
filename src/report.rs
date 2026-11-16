@@ -72,7 +72,7 @@ fn print_children(tree: &Tree, id: NodeId, level: usize, max_depth: usize, top: 
             "{:>10} {:>10} {:>6.1}%  {}{}{}{}",
             format::size(node.size),
             format::size(node.allocated),
-            format::fraction(node.size, parent.size) * 100.0,
+            format::fraction(node.allocated, parent.allocated) * 100.0,
             "  ".repeat(level - 1),
             tree.name(c),
             if node.is_dir { std::path::MAIN_SEPARATOR_STR } else { "" },
@@ -90,7 +90,7 @@ fn print_children(tree: &Tree, id: NodeId, level: usize, max_depth: usize, top: 
             "{:>10} {:>10} {:>6.1}%  {}… {} more",
             format::size(bytes),
             format::size(allocated),
-            format::fraction(bytes, parent.size) * 100.0,
+            format::fraction(allocated, parent.allocated) * 100.0,
             "  ".repeat(level - 1),
             format::count(rest.len() as u64),
         );

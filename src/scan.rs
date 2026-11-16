@@ -225,22 +225,23 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(root.join("a/b")).unwrap();
         fs::create_dir_all(root.join("empty")).unwrap();
-        fs::write(root.join("top.bin"), vec![0u8; 10]).unwrap();
-        fs::write(root.join("a/one.TXT"), vec![0u8; 100]).unwrap();
-        fs::write(root.join("a/b/two.txt"), vec![0u8; 1000]).unwrap();
+        // Above the NTFS resident-file limit, so allocated sizes order like logical sizes.
+        fs::write(root.join("top.bin"), vec![0u8; 10_000]).unwrap();
+        fs::write(root.join("a/one.TXT"), vec![0u8; 100_000]).unwrap();
+        fs::write(root.join("a/b/two.txt"), vec![0u8; 1_000_000]).unwrap();
         fs::write(root.join("a/b/ünïcödé.txt"), vec![0u8; 1]).unwrap();
 
         let tree = scan(&root, &Progress::default()).unwrap().unwrap();
         fs::remove_dir_all(&root).unwrap();
 
         let r = tree.node(ROOT);
-        assert_eq!((r.size, r.files, r.dirs), (1111, 4, 3));
-        // Largest first: a (1101), top.bin (10), empty (0).
+        assert_eq!((r.size, r.files, r.dirs), (1_110_001, 4, 3));
+        // Most disk space first: a, top.bin, empty.
         let names: Vec<&str> = tree.children(ROOT).iter().map(|&c| tree.name(c)).collect();
         assert_eq!(names, ["a", "top.bin", "empty"]);
 
         let a = tree.children(ROOT)[0];
-        assert_eq!((tree.node(a).size, tree.node(a).files, tree.node(a).dirs), (1101, 3, 1));
+        assert_eq!((tree.node(a).size, tree.node(a).files, tree.node(a).dirs), (1_100_001, 3, 1));
         assert_eq!(tree.path(a), root.join("a"));
         let b = tree.children(a)[0];
         let b_names: Vec<&str> = tree.children(b).iter().map(|&c| tree.name(c)).collect();
@@ -249,7 +250,7 @@ mod tests {
 
         let stats = tree.subtree_stats(ROOT, 2);
         let txt = stats.extensions.iter().find(|e| e.ext == "txt").unwrap();
-        assert_eq!((txt.bytes, txt.files), (1101, 3), "extensions are case-folded");
+        assert_eq!((txt.bytes, txt.files), (tree.node(a).allocated, 3), "extensions are case-folded");
         let largest: Vec<&str> = stats.largest.iter().map(|&n| tree.name(n)).collect();
         assert_eq!(largest, ["two.txt", "one.TXT"]);
     }

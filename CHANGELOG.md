@@ -18,6 +18,10 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Disk usage is now ranked by allocated size instead of logical size: % of parent,
+  default sort, treemap areas, file types, largest files, side-panel total and the
+  `--report` percentages. Online-only cloud placeholders (kDrive, OneDrive) no longer
+  appear to fill the disk; e.g. an 821 GB kDrive folder using 1 GB now shows ~0 %.
 - Much lower memory use. The GUI renders with OpenGL (glow) instead of wgpu,
   which drops the idle footprint from ~550 MB to ~140 MB. Scanned trees use
   fixed-size nodes, one shared name buffer and one shared child index, and

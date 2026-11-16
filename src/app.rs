@@ -359,7 +359,7 @@ impl View {
             expanded,
             rows: Vec::new(),
             rows_dirty: true,
-            sort: SortKey::Size,
+            sort: SortKey::Allocated,
             descending: true,
             sort_epoch: 1,
             sorted_epoch: vec![0; n],
@@ -567,8 +567,8 @@ fn tree_table(ui: &mut Ui, view: &mut View, show_files: bool, actions: &mut Vec<
                 row.col(|ui| right_label(ui, format::size(node.size)));
                 row.col(|ui| right_label(ui, format::size(node.allocated)));
                 row.col(|ui| {
-                    let parent_size = node.parent().map_or(node.size, |p| tree.node(p).size);
-                    percent_bar(ui, format::fraction(node.size, parent_size));
+                    let parent_allocated = node.parent().map_or(node.allocated, |p| tree.node(p).allocated);
+                    percent_bar(ui, format::fraction(node.allocated, parent_allocated));
                 });
                 row.col(|ui| {
                     if node.is_dir {
@@ -698,7 +698,7 @@ fn side_panel(ui: &mut Ui, view: &mut View, tab: &mut SideTab, actions: &mut Vec
             actions.push(Action::Focus(p));
         }
         let focus = view.tree.node(view.focus);
-        ui.strong(format::size(focus.size));
+        ui.strong(format::size(focus.allocated)).on_hover_text("Allocated (on disk)");
         ui.add(egui::Label::new(view.tree.path(view.focus).display().to_string()).truncate());
     });
     ui.separator();
@@ -717,7 +717,7 @@ fn treemap_panel(ui: &mut Ui, view: &mut View, actions: &mut Vec<Action>) {
     let (response, painter) = ui.allocate_painter(ui.available_size(), Sense::click());
     let rect = response.rect;
     let tree = &view.tree;
-    if tree.node(view.focus).size == 0 {
+    if tree.node(view.focus).allocated == 0 {
         painter.text(rect.center(), Align2::CENTER_CENTER, "Empty", FontId::proportional(16.0), ui.visuals().weak_text_color());
         return;
     }
@@ -749,16 +749,16 @@ fn treemap_panel(ui: &mut Ui, view: &mut View, actions: &mut Vec<Action>) {
     }
 
     if let Some(id) = hovered {
-        let focus_size = tree.node(view.focus).size;
+        let focus_allocated = tree.node(view.focus).allocated;
         response
             .on_hover_ui_at_pointer(|ui| {
                 let node = tree.node(id);
                 ui.strong(tree.path(id).display().to_string());
                 ui.label(format!(
-                    "{}  ({:.1} % of view) · {} on disk",
-                    format::size(node.size),
-                    format::fraction(node.size, focus_size) * 100.0,
+                    "{} on disk  ({:.1} % of view) · {} size",
                     format::size(node.allocated),
+                    format::fraction(node.allocated, focus_allocated) * 100.0,
+                    format::size(node.size),
                 ));
                 if node.is_dir {
                     ui.label(format!("{} files · {} folders", format::count(node.files), format::count(node.dirs)));
@@ -770,7 +770,7 @@ fn treemap_panel(ui: &mut Ui, view: &mut View, actions: &mut Vec<Action>) {
 
 fn types_table(ui: &mut Ui, view: &View) {
     let Some((_, stats)) = &view.stats else { return };
-    let total = view.tree.node(view.focus).size;
+    let total = view.tree.node(view.focus).allocated;
     TableBuilder::new(ui)
         .id_salt("types")
         .striped(true)
@@ -780,7 +780,7 @@ fn types_table(ui: &mut Ui, view: &View) {
         .column(Column::initial(130.0))
         .column(Column::remainder().at_least(60.0))
         .header(20.0, |mut header| {
-            for title in ["Type", "Size", "% of folder", "Files"] {
+            for title in ["Type", "Allocated", "% of folder", "Files"] {
                 header.col(|ui| {
                     ui.strong(title);
                 });
@@ -814,9 +814,10 @@ fn largest_table(ui: &mut Ui, view: &View, actions: &mut Vec<Action>) {
         .cell_layout(Layout::left_to_right(Align::Center))
         .column(Column::initial(200.0).at_least(80.0).clip(true))
         .column(Column::initial(84.0))
+        .column(Column::initial(84.0))
         .column(Column::remainder().at_least(80.0).clip(true))
         .header(20.0, |mut header| {
-            for title in ["Name", "Size", "Folder"] {
+            for title in ["Name", "Allocated", "Size", "Folder"] {
                 header.col(|ui| {
                     ui.strong(title);
                 });
@@ -830,6 +831,7 @@ fn largest_table(ui: &mut Ui, view: &View, actions: &mut Vec<Action>) {
                 row.col(|ui| {
                     ui.add(egui::Label::new(tree.name(id)).truncate());
                 });
+                row.col(|ui| right_label(ui, format::size(node.allocated)));
                 row.col(|ui| right_label(ui, format::size(node.size)));
                 row.col(|ui| {
                     let folder = tree.path(tree.dir_of(id));

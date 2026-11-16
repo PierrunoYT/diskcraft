@@ -32,7 +32,9 @@ Keyboard in the tree: arrows (←/→ collapse/expand), Home/End, PageUp/PageDow
 
 - **Size** is the logical file length; **Allocated** is the space actually used on disk
   (cluster-rounded; smaller for compressed/sparse files; 0 for OneDrive/kDrive-style
-  online-only placeholders). Percentages and the treemap use Size. 1 KB = 1024 bytes.
+  online-only placeholders). Percentages, the default sort, the treemap, file types and
+  largest files use Allocated, so cloud folders count only what is actually downloaded.
+  1 KB = 1024 bytes.
 - Symlinks and junctions are not followed, so nothing is counted twice through them.
   Hard links are counted once per link.
 - On Unix the scan stays on the root's filesystem (no `/proc`, network mounts, …).
