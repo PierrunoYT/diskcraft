@@ -19,8 +19,8 @@ pub fn size(bytes: u64) -> String {
 }
 
 /// Integer with thousands separators, e.g. `1,234,567`.
-pub fn count(n: u64) -> String {
-    let digits = n.to_string();
+pub fn count(n: impl Into<u64>) -> String {
+    let digits = n.into().to_string();
     let mut out = String::with_capacity(digits.len() + digits.len() / 3);
     for (i, c) in digits.chars().enumerate() {
         if i > 0 && (digits.len() - i).is_multiple_of(3) {
@@ -61,9 +61,9 @@ mod tests {
 
     #[test]
     fn counts_group_thousands() {
-        assert_eq!(count(0), "0");
-        assert_eq!(count(999), "999");
-        assert_eq!(count(1000), "1,000");
-        assert_eq!(count(1_234_567), "1,234,567");
+        assert_eq!(count(0u64), "0");
+        assert_eq!(count(999u64), "999");
+        assert_eq!(count(1000u64), "1,000");
+        assert_eq!(count(1_234_567u64), "1,234,567");
     }
 }

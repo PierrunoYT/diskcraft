@@ -319,7 +319,7 @@ struct View {
 
 impl View {
     fn new(tree: Tree) -> Self {
-        let n = tree.nodes.len();
+        let n = tree.len();
         let mut expanded = vec![false; n];
         expanded[ROOT as usize] = true;
         Self {
@@ -351,7 +351,7 @@ impl View {
                 self.tree.sort_children(id, self.sort, self.descending);
                 self.sorted_epoch[id as usize] = self.sort_epoch;
             }
-            let children = &self.tree.node(id).children;
+            let children = self.tree.children(id);
             stack.extend(
                 children
                     .iter()
@@ -399,7 +399,7 @@ impl View {
 
     fn has_visible_children(&self, id: NodeId, show_files: bool) -> bool {
         let node = self.tree.node(id);
-        node.dirs > 0 || (show_files && !node.children.is_empty())
+        node.dirs > 0 || (show_files && !self.tree.children(id).is_empty())
     }
 
     /// Arrow keys, Home/End and PageUp/PageDown navigate the tree like Explorer.
@@ -448,7 +448,7 @@ impl View {
                 actions.push(Action::Toggle(id));
                 pos
             } else {
-                self.tree.node(id).parent.and_then(position).unwrap_or(pos)
+                self.tree.node(id).parent().and_then(position).unwrap_or(pos)
             }
         } else {
             pos
@@ -520,7 +520,7 @@ fn tree_table(ui: &mut Ui, view: &mut View, show_files: bool, actions: &mut Vec<
                         }
                     }
                     let icon = if node.is_dir { "🗁" } else { "🗋" };
-                    let mut text = RichText::new(format!("{icon} {}", node.name));
+                    let mut text = RichText::new(format!("{icon} {}", tree.name(id)));
                     if node.is_dir {
                         text = text.strong();
                     }
@@ -532,7 +532,7 @@ fn tree_table(ui: &mut Ui, view: &mut View, show_files: bool, actions: &mut Vec<
                 });
                 row.col(|ui| right_label(ui, format::size(node.size)));
                 row.col(|ui| {
-                    let parent_size = node.parent.map_or(node.size, |p| tree.node(p).size);
+                    let parent_size = node.parent().map_or(node.size, |p| tree.node(p).size);
                     percent_bar(ui, format::fraction(node.size, parent_size));
                 });
                 row.col(|ui| {
@@ -546,7 +546,7 @@ fn tree_table(ui: &mut Ui, view: &mut View, show_files: bool, actions: &mut Vec<
                     }
                 });
                 row.col(|ui| {
-                    if let Some(t) = node.modified {
+                    if let Some(t) = node.modified() {
                         ui.label(format::date(t));
                     }
                 });
@@ -656,7 +656,7 @@ fn side_panel(ui: &mut Ui, view: &mut View, tab: &mut SideTab, actions: &mut Vec
         ui.selectable_value(tab, SideTab::Largest, "Largest files");
     });
     ui.horizontal(|ui| {
-        let parent = view.tree.node(view.focus).parent;
+        let parent = view.tree.node(view.focus).parent();
         if ui.add_enabled(parent.is_some(), Button::new("⬆")).on_hover_text("Parent folder").clicked()
             && let Some(p) = parent
         {
@@ -697,7 +697,7 @@ fn treemap_panel(ui: &mut Ui, view: &mut View, actions: &mut Vec<Action>) {
     if response.double_clicked() {
         // Zoom one level: the focus child containing the clicked cell.
         let child = hovered.and_then(|h| {
-            tree.ancestors_inclusive(h).find(|&a| tree.node(a).parent == Some(view.focus))
+            tree.ancestors_inclusive(h).find(|&a| tree.node(a).parent() == Some(view.focus))
         });
         if let Some(c) = child.filter(|&c| tree.node(c).is_dir) {
             actions.push(Action::Focus(c));
@@ -708,7 +708,7 @@ fn treemap_panel(ui: &mut Ui, view: &mut View, actions: &mut Vec<Action>) {
         actions.push(Action::Reveal(id));
     }
     if response.secondary_clicked()
-        && let Some(parent) = tree.node(view.focus).parent
+        && let Some(parent) = tree.node(view.focus).parent()
     {
         actions.push(Action::Focus(parent));
     }
@@ -792,7 +792,7 @@ fn largest_table(ui: &mut Ui, view: &View, actions: &mut Vec<Action>) {
                 let node = tree.node(id);
                 row.set_selected(id == view.selected);
                 row.col(|ui| {
-                    ui.add(egui::Label::new(&*node.name).truncate());
+                    ui.add(egui::Label::new(tree.name(id)).truncate());
                 });
                 row.col(|ui| right_label(ui, format::size(node.size)));
                 row.col(|ui| {

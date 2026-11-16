@@ -6,6 +6,14 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Much lower memory use. The GUI renders with OpenGL (glow) instead of wgpu,
+  which drops the idle footprint from ~550 MB to ~140 MB. Scanned trees use
+  fixed 48-byte nodes, one shared name buffer and one shared child index, and
+  the scanner no longer allocates per file: peak memory for a 460k-entry scan
+  fell from 101 MB to 60 MB.
+
 ## [0.1.0] - 2026-11-16
 
 ### Added

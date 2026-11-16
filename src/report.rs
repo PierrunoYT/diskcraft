@@ -44,7 +44,7 @@ pub fn run(args: &[String]) -> ExitCode {
     let r = tree.node(ROOT);
     println!(
         "{}  {}  ({} files, {} folders)  scanned in {:.2?}{}",
-        r.name,
+        tree.root_path.display(),
         format::size(r.size),
         format::count(r.files),
         format::count(r.dirs),
@@ -63,14 +63,15 @@ fn print_children(tree: &Tree, id: NodeId, level: usize, max_depth: usize, top: 
         return;
     }
     let parent = tree.node(id);
-    for &c in parent.children.iter().take(top) {
+    let children = tree.children(id);
+    for &c in children.iter().take(top) {
         let node = tree.node(c);
         println!(
             "{:>10} {:>6.1}%  {}{}{}{}",
             format::size(node.size),
             format::fraction(node.size, parent.size) * 100.0,
             "  ".repeat(level - 1),
-            node.name,
+            tree.name(c),
             if node.is_dir { std::path::MAIN_SEPARATOR_STR } else { "" },
             if node.error { "  [unreadable]" } else { "" },
         );
@@ -78,7 +79,7 @@ fn print_children(tree: &Tree, id: NodeId, level: usize, max_depth: usize, top: 
             print_children(tree, c, level + 1, max_depth, top);
         }
     }
-    let rest = &parent.children[parent.children.len().min(top)..];
+    let rest = &children[children.len().min(top)..];
     if !rest.is_empty() {
         let bytes: u64 = rest.iter().map(|&c| tree.node(c).size).sum();
         println!(

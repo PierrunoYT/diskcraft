@@ -69,9 +69,9 @@ impl Treemap {
             let text_color = if cell.kind == CellKind::Frame { Color32::WHITE } else { Color32::BLACK };
             let label = match cell.kind {
                 CellKind::Frame if r.width() > 40.0 && r.height() > 48.0 => {
-                    Some(format!("{}  {}", node.name, format::size(node.size)))
+                    Some(format!("{}  {}", tree.name(cell.id), format::size(node.size)))
                 }
-                CellKind::Leaf if r.width() > 48.0 && r.height() > 16.0 => Some(node.name.to_string()),
+                CellKind::Leaf if r.width() > 48.0 && r.height() > 16.0 => Some(tree.name(cell.id).to_owned()),
                 _ => None,
             };
             if let Some(label) = label {
@@ -98,8 +98,7 @@ impl Treemap {
 fn layout_dir(tree: &Tree, dir: NodeId, rect: Rect, depth: u8, hue: Option<f32>, out: &mut Vec<Cell>) {
     // The tree view may have re-sorted children; the layout needs them by size.
     let mut items: Vec<(NodeId, u64)> = tree
-        .node(dir)
-        .children
+        .children(dir)
         .iter()
         .map(|&c| (c, tree.node(c).size))
         .filter(|&(_, size)| size > 0)
