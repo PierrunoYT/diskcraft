@@ -1,0 +1,20 @@
+[package]
+name = "diskcraft"
+version = "0.1.0"
+edition = "2024"
+description = "TreeSize-style disk usage analyzer"
+
+[dependencies]
+chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
+eframe = "0.37.0"
+egui = { version = "0.37.0", features = ["monochrome_emoji_fonts"] }
+egui_extras = "0.37.0"
+rayon = "1.12.0"
+rfd = "0.18.0"
+
+[target."cfg(windows)".dependencies]
+windows-sys = { version = "0.61", features = ["Win32_System_Console", "Win32_Storage_FileSystem"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
