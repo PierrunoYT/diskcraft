@@ -26,7 +26,11 @@ pub fn run(initial: Option<PathBuf>) -> eframe::Result {
         viewport: egui::ViewportBuilder::default()
             .with_title("DiskCraft")
             .with_inner_size([1320.0, 820.0])
-            .with_min_inner_size([720.0, 420.0]),
+            .with_min_inner_size([720.0, 420.0])
+            .with_icon(
+                eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon.png"))
+                    .expect("embedded icon is a valid PNG"),
+            ),
         ..Default::default()
     };
     eframe::run_native(

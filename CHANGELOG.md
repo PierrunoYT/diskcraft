@@ -8,6 +8,7 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- App logo: window/taskbar icon and embedded Windows `.exe` icon.
 - Allocated (size on disk) column, sortable, also in the status bar, treemap tooltip
   and `--report` output. Read from the directory listing itself
   (`FILE_FULL_DIR_INFO` on Windows, `st_blocks` on Unix), so scans are no slower.
