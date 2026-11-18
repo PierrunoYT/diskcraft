@@ -65,13 +65,25 @@ cargo build --release
 .\target\release\diskcraft.exe
 ```
 
-**Linux** needs the Wayland and xkbcommon development files (Debian/Ubuntu:
-`sudo apt install pkg-config libwayland-dev libxkbcommon-dev`). **macOS** needs nothing extra.
+**Linux (Debian/Ubuntu)**
 
 ```sh
-cargo build --release
-./target/release/diskcraft
+sudo apt install build-essential pkg-config libwayland-dev libxkbcommon-dev libxkbcommon-x11-0 xdg-utils zenity
+cargo build --release --locked
+./target/release/diskcraft "$HOME"
 ```
+
+Run the GUI from a Wayland or X11 desktop session. `libxkbcommon-x11-0` is required
+on X11; without it the app can build but panics at launch. `zenity` lets **Browse…**
+work when no desktop file chooser portal is available, and `xdg-utils` provides
+`xdg-open` for the file manager action. Report mode does not need a desktop session:
+
+```sh
+./target/release/diskcraft --report "$HOME" --depth 2 --top 10
+```
+
+**macOS** needs no extra system packages. Run `cargo build --release` and launch
+`./target/release/diskcraft`.
 
 ## Usage
 
