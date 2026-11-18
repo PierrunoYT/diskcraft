@@ -82,8 +82,18 @@ work when no desktop file chooser portal is available, and `xdg-utils` provides
 ./target/release/diskcraft --report "$HOME" --depth 2 --top 10
 ```
 
-**macOS** needs no extra system packages. Run `cargo build --release` and launch
-`./target/release/diskcraft`.
+**macOS**
+
+In addition to Rust, you need the Xcode Command Line Tools or full Xcode. If neither is
+installed, run `xcode-select --install` first. Then, from the repository:
+
+```sh
+cargo build --release --locked
+./target/release/diskcraft
+```
+
+The release build, native folder picker, and report mode were verified on Apple Silicon
+(`arm64`) with macOS 27.2 and Rust 1.99.1. Intel Macs and older macOS versions were not tested.
 
 ## Usage
 
